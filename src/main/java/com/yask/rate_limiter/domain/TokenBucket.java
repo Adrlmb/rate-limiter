@@ -1,4 +1,6 @@
 package com.yask.rate_limiter.domain;
+import ch.qos.logback.core.joran.conditional.IfAction;
+
 import java.time.Instant;
 
 public class TokenBucket {
@@ -35,5 +37,20 @@ public class TokenBucket {
 
     public double getRefillRate() {
         return refillRate;
+    }
+
+    public boolean tryConsume(double tokenCost) {
+        if (!Double.isFinite(tokenCost) || tokenCost <= 0) {
+            throw new IllegalArgumentException("tokenCost must be a positive number");
+        }
+        if(tokenCost > maxTokens) {
+            throw new IllegalArgumentException("tokenCost must not exceed maxTokens");
+        }
+
+        if(availableTokens >= tokenCost) {
+            availableTokens-=tokenCost;
+            return true;
+        }
+        return false;
     }
 }
