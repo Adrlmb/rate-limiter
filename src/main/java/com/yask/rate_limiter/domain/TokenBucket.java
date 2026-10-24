@@ -1,6 +1,7 @@
 package com.yask.rate_limiter.domain;
 import ch.qos.logback.core.joran.conditional.IfAction;
 
+import java.time.Duration;
 import java.time.Instant;
 
 public class TokenBucket {
@@ -47,10 +48,22 @@ public class TokenBucket {
             throw new IllegalArgumentException("tokenCost must not exceed maxTokens");
         }
 
+        refill();
+
         if(availableTokens >= tokenCost) {
             availableTokens-=tokenCost;
             return true;
         }
         return false;
+    }
+
+    private void refill(){
+        Instant now = Instant.now();
+        Duration timeInterval = Duration.between(lastRefillTime, now);
+        double elapsedSeconds = timeInterval.toMillis() / 1000.0;
+        double tokensToAdd = elapsedSeconds * refillRate;
+
+        availableTokens = Math.min(maxTokens, availableTokens + tokensToAdd);
+        lastRefillTime = now;
     }
 }
