@@ -1,16 +1,17 @@
 package com.yask.rate_limiter.domain;
-import ch.qos.logback.core.joran.conditional.IfAction;
-
+import com.yask.rate_limiter.time.TimeSource;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 public class TokenBucket {
     private final double maxTokens;
     private double availableTokens;
-    private Instant lastRefillTime;
+    private long lastRefillNanos;
     private final double refillRate;
+    private final TimeSource timeSource;
 
-    public TokenBucket(double maxTokens, double refillRate) {
+    public TokenBucket(double maxTokens, double refillRate, TimeSource timeSource) {
         if(!Double.isFinite(maxTokens) || maxTokens <= 0) {
             throw new IllegalArgumentException("maxTokens must be a positive number");
         }
@@ -20,27 +21,29 @@ public class TokenBucket {
 
         this.maxTokens = maxTokens;
         this.availableTokens = maxTokens;
-        this.lastRefillTime = Instant.now();
+        this.timeSource = Objects.requireNonNull(timeSource,  "timeSource must not be null");
+        this.lastRefillNanos = timeSource.nanoTime();
         this.refillRate = refillRate;
+
     }
 
     public double getMaxTokens() {
         return maxTokens;
     }
 
-    public double getAvailableTokens() {
+    public synchronized double getAvailableTokens() {
         return availableTokens;
     }
 
-    public Instant getLastRefillTime() {
-        return lastRefillTime;
+    public synchronized long getLastRefillNanos() {
+        return lastRefillNanos;
     }
 
     public double getRefillRate() {
         return refillRate;
     }
 
-    public boolean tryConsume(double tokenCost) {
+    public synchronized boolean tryConsume(double tokenCost) {
         if (!Double.isFinite(tokenCost) || tokenCost <= 0) {
             throw new IllegalArgumentException("tokenCost must be a positive number");
         }
@@ -58,12 +61,17 @@ public class TokenBucket {
     }
 
     private void refill(){
-        Instant now = Instant.now();
-        Duration timeInterval = Duration.between(lastRefillTime, now);
-        double elapsedSeconds = timeInterval.toMillis() / 1000.0;
+        long now = timeSource.nanoTime();
+        long elapsedNanos = now - lastRefillNanos;
+
+        if(elapsedNanos <= 0){
+            return;
+        }
+
+        double elapsedSeconds = elapsedNanos/ 1_000_000_000.0;
         double tokensToAdd = elapsedSeconds * refillRate;
 
         availableTokens = Math.min(maxTokens, availableTokens + tokensToAdd);
-        lastRefillTime = now;
+        lastRefillNanos = now;
     }
 }
